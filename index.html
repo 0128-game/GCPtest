@@ -4,15 +4,19 @@
     <meta charset="UTF-8">
     <title>瞬発力じゃんけんテスト</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 30px; background-color: #f0f0f0; }
+        body { font-family: sans-serif; text-align: center; padding-top: 20px; background-color: #f0f0f0; }
         #game-box { background: white; max-width: 500px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         #enemy-hand { font-size: 80px; margin: 15px 0; min-height: 100px; }
         #instruction { font-size: 24px; font-weight: bold; color: #d9534f; min-height: 36px; }
-        .btn { font-size: 20px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
+        .btn { font-size: 18px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         #start-btn { background-color: #5cb85c; font-size: 24px; margin-top: 10px; }
         #result-msg { font-weight: bold; margin-top: 15px; min-height: 24px; }
-        .key-guide { font-size: 14px; color: #666; margin-top: 5px; }
+        
+        /* キー設定エリアのスタイル */
+        .key-config { background: #eef7ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #bce8f1; }
+        .key-config input { width: 40px; text-align: center; font-size: 16px; font-weight: bold; text-transform: uppercase; }
+        
         .rank-info { font-size: 13px; color: #555; text-align: left; margin-top: 20px; background: #fafafa; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
         .rank-title { font-weight: bold; margin-bottom: 5px; }
     </style>
@@ -21,16 +25,24 @@
 
 <div id="game-box">
     <h1>じゃんけん瞬発力テスト</h1>
+
+    <!-- キー設定（キーコンフィグ） -->
+    <div class="key-config" id="key-config-box">
+        <b>【操作キーの設定】</b><br>
+        ✊ グー: <input type="text" id="key-g" maxlength="1" value="g" onchange="updateKeyGuide()">
+        ✌️ チョキ: <input type="text" id="key-c" maxlength="1" value="c" onchange="updateKeyGuide()">
+        🖐️ パー: <input type="text" id="key-p" maxlength="1" value="p" onchange="updateKeyGuide()">
+    </div>
+
     <div id="instruction">「スタート」を押してね</div>
     <div id="enemy-hand">✊</div>
     <div id="result-msg"></div>
 
     <div id="controls" style="display:none;">
         <p>指示に合う手を選べ！</p>
-        <button class="btn" id="btn-g" onclick="playerSelect('✊')">✊ グー (G)</button>
-        <button class="btn" id="btn-c" onclick="playerSelect('✌️')">✌️ チョキ (C)</button>
-        <button class="btn" id="btn-p" onclick="playerSelect('🖐️')">🖐️ パー (P)</button>
-        <div class="key-guide">※キーボードの G / C / P でも操作できます</div>
+        <button class="btn" id="btn-g" onclick="playerSelect('✊')">✊ グー</button>
+        <button class="btn" id="btn-c" onclick="playerSelect('✌️')">✌️ チョキ</button>
+        <button class="btn" id="btn-p" onclick="playerSelect('🖐️')">🖐️ パー</button>
     </div>
 
     <br>
@@ -60,18 +72,40 @@
     let misses = 0;
     const maxRounds = 5;
     
-    let isWaitingForHand = false; // 合図待ち状態フラグ
-    let canInput = false;          // 解答受付状態
-    let earlyPressCount = 0;       // フライング回数（待機時間内）
+    let isWaitingForHand = false;
+    let canInput = false;
+    let earlyPressCount = 0;
     let timerId = null;
 
-    // キーボード操作 (G / C / P)
+    // 設定されたキーを取得
+    function getKeys() {
+        return {
+            g: (document.getElementById('key-g').value || 'g').toLowerCase(),
+            c: (document.getElementById('key-c').value || 'c').toLowerCase(),
+            p: (document.getElementById('key-p').value || 'p').toLowerCase()
+        };
+    }
+
+    // ボタンのテキストを設定キーに合わせて更新
+    function updateKeyGuide() {
+        const keys = getKeys();
+        document.getElementById('btn-g').innerText = `✊ グー (${keys.g.toUpperCase()})`;
+        document.getElementById('btn-c').innerText = `✌️ チョキ (${keys.c.toUpperCase()})`;
+        document.getElementById('btn-p').innerText = `🖐️ パー (${keys.p.toUpperCase()})`;
+    }
+
+    // 初回読み込み時にキー表記を反映
+    updateKeyGuide();
+
+    // キーボード操作処理
     window.addEventListener('keydown', (event) => {
         const key = event.key.toLowerCase();
+        const keys = getKeys();
         let selectedHand = '';
-        if (key === 'g') selectedHand = '✊';
-        if (key === 'c') selectedHand = '✌️';
-        if (key === 'p') selectedHand = '🖐️';
+
+        if (key === keys.g) selectedHand = '✊';
+        if (key === keys.c) selectedHand = '✌️';
+        if (key === keys.p) selectedHand = '🖐️';
 
         if (selectedHand) {
             handleInput(selectedHand);
@@ -88,11 +122,9 @@
             earlyPressCount++;
             
             if (earlyPressCount === 1) {
-                // 1回目のフライング：警告を出してスルー
                 document.getElementById('result-msg').innerText = `フライング注意！（あと1回でミス）`;
                 document.getElementById('result-msg').style.color = 'orange';
             } else if (earlyPressCount >= 2) {
-                // 2回目のフライング：ミス確定で次のラウンドへ
                 clearTimeout(timerId);
                 isWaitingForHand = false;
                 misses++;
@@ -129,6 +161,7 @@
         totalTime = 0;
         misses = 0;
         document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('key-config-box').style.display = 'none'; // プレイ中は設定非表示
         document.getElementById('controls').style.display = 'block';
         nextRound();
     }
@@ -142,7 +175,7 @@
         round++;
         canInput = false;
         isWaitingForHand = true;
-        earlyPressCount = 0; // フライングカウントをリセット
+        earlyPressCount = 0;
         
         document.getElementById('instruction').innerText = `第 ${round} 回戦：じゃんけん...`;
         document.getElementById('enemy-hand').innerText = '❓';
@@ -184,6 +217,7 @@
         canInput = false;
         isWaitingForHand = false;
         document.getElementById('controls').style.display = 'none';
+        document.getElementById('key-config-box').style.display = 'block'; // ゲーム終了時に設定を再表示
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('start-btn').innerText = 'もう一度遊ぶ';
 
