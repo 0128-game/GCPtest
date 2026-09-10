@@ -5,7 +5,7 @@
     <title>瞬発力じゃんけんテスト</title>
     <style>
         body { font-family: sans-serif; text-align: center; padding-top: 30px; background-color: #f0f0f0; }
-        #game-box { background: white; max-width: 480px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #game-box { background: white; max-width: 500px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         #enemy-hand { font-size: 80px; margin: 15px 0; min-height: 100px; }
         #instruction { font-size: 24px; font-weight: bold; color: #d9534f; min-height: 36px; }
         .btn { font-size: 20px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
@@ -27,9 +27,9 @@
 
     <div id="controls" style="display:none;">
         <p>指示に合う手を選べ！</p>
-        <button class="btn" onclick="playerSelect('✊')">✊ グー (G)</button>
-        <button class="btn" onclick="playerSelect('✌️')">✌️ チョキ (C)</button>
-        <button class="btn" onclick="playerSelect('🖐️')">🖐️ パー (P)</button>
+        <button class="btn" id="btn-g" onclick="playerSelect('✊')">✊ グー (G)</button>
+        <button class="btn" id="btn-c" onclick="playerSelect('✌️')">✌️ チョキ (C)</button>
+        <button class="btn" id="btn-p" onclick="playerSelect('🖐️')">🖐️ パー (P)</button>
         <div class="key-guide">※キーボードの G / C / P でも操作できます</div>
     </div>
 
@@ -38,13 +38,13 @@
 
     <!-- ランクの基準案内 -->
     <div class="rank-info">
-        <div class="rank-title">【ランク判定基準（平均記録）】</div>
-        🏆 <b>Sランク</b> : 0.65秒未満 (神レベル)<br>
-        🥇 <b>Aランク</b> : 0.65秒 〜 0.85秒未満 (超人的)<br>
-        🥈 <b>Bランク</b> : 0.85秒 〜 1.10秒未満 (普通)<br>
-        🥉 <b>Cランク</b> : 1.10秒 〜 1.50秒未満 (やや遅い)<br>
-        🐢 <b>Dランク</b> : 1.50秒以上 (もっと集中！)<br>
-        <small>※ミス1回につき+1.0秒のペナルティ</small>
+        <div class="rank-title">【ランク判定基準（タイム ＆ ミス数）】</div>
+        🏆 <b>Sランク</b> : 平均 0.60秒未満 ＆ <b>ノーミス</b><br>
+        🥇 <b>Aランク</b> : 平均 0.80秒未満 ＆ ミス1回以内<br>
+        🥈 <b>Bランク</b> : 平均 1.00秒未満 ＆ ミス2回以内<br>
+        🥉 <b>Cランク</b> : 平均 1.30秒未満 ＆ ミス3回以内<br>
+        🐢 <b>Dランク</b> : それ以外（1.30秒以上 または ミス4回以上）<br>
+        <small>※待機中に2回フライングするとミスになります</small>
     </div>
 </div>
 
@@ -59,21 +59,70 @@
     let totalTime = 0;
     let misses = 0;
     const maxRounds = 5;
-    let canInput = false;
+    
+    let isWaitingForHand = false; // 合図待ち状態フラグ
+    let canInput = false;          // 解答受付状態
+    let earlyPressCount = 0;       // フライング回数（待機時間内）
+    let timerId = null;
 
     // キーボード操作 (G / C / P)
     window.addEventListener('keydown', (event) => {
-        if (!canInput) return;
-
         const key = event.key.toLowerCase();
-        if (key === 'g') {
-            playerSelect('✊');
-        } else if (key === 'c') {
-            playerSelect('✌️');
-        } else if (key === 'p') {
-            playerSelect('🖐️');
+        let selectedHand = '';
+        if (key === 'g') selectedHand = '✊';
+        if (key === 'c') selectedHand = '✌️';
+        if (key === 'p') selectedHand = '🖐️';
+
+        if (selectedHand) {
+            handleInput(selectedHand);
         }
     });
+
+    function playerSelect(playerHand) {
+        handleInput(playerHand);
+    }
+
+    function handleInput(playerHand) {
+        // 合図前にボタンを押した場合（フライング処理）
+        if (isWaitingForHand) {
+            earlyPressCount++;
+            
+            if (earlyPressCount === 1) {
+                // 1回目のフライング：警告を出してスルー
+                document.getElementById('result-msg').innerText = `フライング注意！（あと1回でミス）`;
+                document.getElementById('result-msg').style.color = 'orange';
+            } else if (earlyPressCount >= 2) {
+                // 2回目のフライング：ミス確定で次のラウンドへ
+                clearTimeout(timerId);
+                isWaitingForHand = false;
+                misses++;
+                
+                document.getElementById('result-msg').innerText = `2回フライングでミス！`;
+                document.getElementById('result-msg').style.color = 'red';
+                setTimeout(nextRound, 1200);
+            }
+            return;
+        }
+
+        if (!canInput) return;
+        canInput = false;
+
+        const reactionTime = (performance.now() - startTime) / 1000;
+        const correctHand = getCorrectHand(currentEnemyHand, currentCondition);
+
+        totalTime += reactionTime;
+
+        if (playerHand === correctHand) {
+            document.getElementById('result-msg').innerText = `正解！ (${reactionTime.toFixed(3)}秒)`;
+            document.getElementById('result-msg').style.color = 'green';
+        } else {
+            misses++;
+            document.getElementById('result-msg').innerText = `ミス！ (${reactionTime.toFixed(3)}秒)`;
+            document.getElementById('result-msg').style.color = 'red';
+        }
+
+        setTimeout(nextRound, 1200);
+    }
 
     function startGame() {
         round = 0;
@@ -92,15 +141,18 @@
         
         round++;
         canInput = false;
-        setButtonsEnabled(false);
+        isWaitingForHand = true;
+        earlyPressCount = 0; // フライングカウントをリセット
+        
         document.getElementById('instruction').innerText = `第 ${round} 回戦：じゃんけん...`;
         document.getElementById('enemy-hand').innerText = '❓';
         document.getElementById('result-msg').innerText = '';
 
-        // 1秒〜5秒のランダムな待ち時間（1000ms〜5000ms）
+        // 1秒〜5秒のランダムな待ち時間
         const randomDelay = Math.floor(Math.random() * 4000) + 1000;
 
-        setTimeout(() => {
+        timerId = setTimeout(() => {
+            isWaitingForHand = false;
             currentEnemyHand = hands[Math.floor(Math.random() * hands.length)];
             currentCondition = conditions[Math.floor(Math.random() * conditions.length)];
 
@@ -109,31 +161,7 @@
             
             startTime = performance.now();
             canInput = true;
-            setButtonsEnabled(true);
         }, randomDelay);
-    }
-
-    function playerSelect(playerHand) {
-        if (!canInput) return;
-        canInput = false;
-
-        const reactionTime = (performance.now() - startTime) / 1000;
-        const correctHand = getCorrectHand(currentEnemyHand, currentCondition);
-
-        if (playerHand === correctHand) {
-            totalTime += reactionTime;
-            document.getElementById('result-msg').innerText = `正解！ (${reactionTime.toFixed(3)}秒)`;
-            document.getElementById('result-msg').style.color = 'green';
-        } else {
-            // ミスは1秒のペナルティ加算
-            totalTime += reactionTime + 1.0;
-            misses++;
-            document.getElementById('result-msg').innerText = `ミス！ (+1.0秒ペナルティ)`;
-            document.getElementById('result-msg').style.color = 'red';
-        }
-
-        setButtonsEnabled(false);
-        setTimeout(nextRound, 1200);
     }
 
     function getCorrectHand(enemy, condition) {
@@ -152,33 +180,28 @@
         }
     }
 
-    function setButtonsEnabled(enabled) {
-        const buttons = document.querySelectorAll('#controls .btn');
-        buttons.forEach(btn => btn.disabled = !enabled);
-    }
-
     function endGame() {
         canInput = false;
+        isWaitingForHand = false;
         document.getElementById('controls').style.display = 'none';
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('start-btn').innerText = 'もう一度遊ぶ';
 
         const avgTime = parseFloat((totalTime / maxRounds).toFixed(3));
         
-        // ランク判定と絵文字の決定
         let rank = '';
         let icon = '';
         
-        if (avgTime < 0.65) {
+        if (avgTime < 0.60 && misses === 0) {
             rank = 'S';
             icon = '🏆';
-        } else if (avgTime < 0.85) {
+        } else if (avgTime < 0.80 && misses <= 1) {
             rank = 'A';
             icon = '🥇';
-        } else if (avgTime < 1.10) {
+        } else if (avgTime < 1.00 && misses <= 2) {
             rank = 'B';
             icon = '🥈';
-        } else if (avgTime < 1.50) {
+        } else if (avgTime < 1.30 && misses <= 3) {
             rank = 'C';
             icon = '🥉';
         } else {
@@ -186,7 +209,6 @@
             icon = '🐢';
         }
 
-        // 結果の反映
         document.getElementById('enemy-hand').innerText = icon;
         document.getElementById('instruction').innerText = `ゲーム終了！ [ランク ${rank}]`;
         document.getElementById('result-msg').style.color = 'black';
