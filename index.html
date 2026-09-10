@@ -4,15 +4,17 @@
     <meta charset="UTF-8">
     <title>瞬発力じゃんけんテスト</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 50px; background-color: #f0f0f0; }
-        #game-box { background: white; max-width: 450px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        #enemy-hand { font-size: 80px; margin: 20px 0; min-height: 100px; }
+        body { font-family: sans-serif; text-align: center; padding-top: 30px; background-color: #f0f0f0; }
+        #game-box { background: white; max-width: 480px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #enemy-hand { font-size: 80px; margin: 15px 0; min-height: 100px; }
         #instruction { font-size: 24px; font-weight: bold; color: #d9534f; min-height: 36px; }
         .btn { font-size: 20px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         #start-btn { background-color: #5cb85c; font-size: 24px; margin-top: 10px; }
         #result-msg { font-weight: bold; margin-top: 15px; min-height: 24px; }
         .key-guide { font-size: 14px; color: #666; margin-top: 5px; }
+        .rank-info { font-size: 13px; color: #555; text-align: left; margin-top: 20px; background: #fafafa; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        .rank-title { font-weight: bold; margin-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -33,6 +35,17 @@
 
     <br>
     <button id="start-btn" class="btn" onclick="startGame()">スタート</button>
+
+    <!-- ランクの基準案内 -->
+    <div class="rank-info">
+        <div class="rank-title">【ランク判定基準（平均記録）】</div>
+        🏆 <b>Sランク</b> : 0.65秒未満 (神レベル)<br>
+        🥇 <b>Aランク</b> : 0.65秒 〜 0.85秒未満 (超人的)<br>
+        🥈 <b>Bランク</b> : 0.85秒 〜 1.10秒未満 (普通)<br>
+        🥉 <b>Cランク</b> : 1.10秒 〜 1.50秒未満 (やや遅い)<br>
+        🐢 <b>Dランク</b> : 1.50秒以上 (もっと集中！)<br>
+        <small>※ミス1回につき+1.0秒のペナルティ</small>
+    </div>
 </div>
 
 <script>
@@ -46,11 +59,11 @@
     let totalTime = 0;
     let misses = 0;
     const maxRounds = 5;
-    let canInput = false; // 入力受付状態フラグ
+    let canInput = false;
 
-    // キーボードの操作を設定 (G / C / P)
+    // キーボード操作 (G / C / P)
     window.addEventListener('keydown', (event) => {
-        if (!canInput) return; // 入力受付時間外なら無視
+        if (!canInput) return;
 
         const key = event.key.toLowerCase();
         if (key === 'g') {
@@ -102,7 +115,7 @@
 
     function playerSelect(playerHand) {
         if (!canInput) return;
-        canInput = false; // 連打防止のため即座に受付終了
+        canInput = false;
 
         const reactionTime = (performance.now() - startTime) / 1000;
         const correctHand = getCorrectHand(currentEnemyHand, currentCondition);
@@ -112,10 +125,10 @@
             document.getElementById('result-msg').innerText = `正解！ (${reactionTime.toFixed(3)}秒)`;
             document.getElementById('result-msg').style.color = 'green';
         } else {
-            // ミスは1秒のペナルティ付加
+            // ミスは1秒のペナルティ加算
             totalTime += reactionTime + 1.0;
             misses++;
-            document.getElementById('result-msg').innerText = `ミス！ (+1秒ペナルティ)`;
+            document.getElementById('result-msg').innerText = `ミス！ (+1.0秒ペナルティ)`;
             document.getElementById('result-msg').style.color = 'red';
         }
 
@@ -149,13 +162,36 @@
         document.getElementById('controls').style.display = 'none';
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('start-btn').innerText = 'もう一度遊ぶ';
-        document.getElementById('enemy-hand').innerText = '🏆';
 
-        const avgTime = (totalTime / maxRounds).toFixed(3);
-        document.getElementById('instruction').innerText = `ゲーム終了！`;
+        const avgTime = parseFloat((totalTime / maxRounds).toFixed(3));
+        
+        // ランク判定と絵文字の決定
+        let rank = '';
+        let icon = '';
+        
+        if (avgTime < 0.65) {
+            rank = 'S';
+            icon = '🏆';
+        } else if (avgTime < 0.85) {
+            rank = 'A';
+            icon = '🥇';
+        } else if (avgTime < 1.10) {
+            rank = 'B';
+            icon = '🥈';
+        } else if (avgTime < 1.50) {
+            rank = 'C';
+            icon = '🥉';
+        } else {
+            rank = 'D';
+            icon = '🐢';
+        }
+
+        // 結果の反映
+        document.getElementById('enemy-hand').innerText = icon;
+        document.getElementById('instruction').innerText = `ゲーム終了！ [ランク ${rank}]`;
         document.getElementById('result-msg').style.color = 'black';
         document.getElementById('result-msg').innerHTML = 
-            `平均反応速度: <b>${avgTime}秒</b><br>ミス回数: ${misses}回`;
+            `平均反応速度: <b>${avgTime.toFixed(3)}秒</b><br>ミス回数: ${misses}回`;
     }
 </script>
 
