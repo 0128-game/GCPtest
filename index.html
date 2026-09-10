@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>瞬発力じゃんけんテスト</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; background-color: #f0f0f0; }
+        #game-box { background: white; max-width: 450px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #enemy-hand { font-size: 80px; margin: 20px 0; min-height: 100px; }
+        #instruction { font-size: 24px; font-weight: bold; color: #d9534f; min-height: 36px; }
+        .btn { font-size: 20px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        #start-btn { background-color: #5cb85c; font-size: 24px; margin-top: 10px; }
+        #result-msg { font-weight: bold; margin-top: 15px; min-height: 24px; }
+        .key-guide { font-size: 14px; color: #666; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="game-box">
+    <h1>じゃんけん瞬発力テスト</h1>
+    <div id="instruction">「スタート」を押してね</div>
+    <div id="enemy-hand">✊</div>
+    <div id="result-msg"></div>
+
+    <div id="controls" style="display:none;">
+        <p>指示に合う手を選べ！</p>
+        <button class="btn" onclick="playerSelect('✊')">✊ グー (G)</button>
+        <button class="btn" onclick="playerSelect('✌️')">✌️ チョキ (C)</button>
+        <button class="btn" onclick="playerSelect('🖐️')">🖐️ パー (P)</button>
+        <div class="key-guide">※キーボードの G / C / P でも操作できます</div>
+    </div>
+
+    <br>
+    <button id="start-btn" class="btn" onclick="startGame()">スタート</button>
+</div>
+
+<script>
+    const hands = ['✊', '✌️', '🖐️'];
+    const conditions = ['勝て！', '負けろ！', 'あいこ！'];
+    
+    let currentEnemyHand = '';
+    let currentCondition = '';
+    let startTime = 0;
+    let round = 0;
+    let totalTime = 0;
+    let misses = 0;
+    const maxRounds = 5;
+    let canInput = false; // 入力受付状態フラグ
+
+    // キーボードの操作を設定 (G / C / P)
+    window.addEventListener('keydown', (event) => {
+        if (!canInput) return; // 入力受付時間外なら無視
+
+        const key = event.key.toLowerCase();
+        if (key === 'g') {
+            playerSelect('✊');
+        } else if (key === 'c') {
+            playerSelect('✌️');
+        } else if (key === 'p') {
+            playerSelect('🖐️');
+        }
+    });
+
+    function startGame() {
+        round = 0;
+        totalTime = 0;
+        misses = 0;
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('controls').style.display = 'block';
+        nextRound();
+    }
+
+    function nextRound() {
+        if (round >= maxRounds) {
+            endGame();
+            return;
+        }
+        
+        round++;
+        canInput = false;
+        setButtonsEnabled(false);
+        document.getElementById('instruction').innerText = `第 ${round} 回戦：じゃんけん...`;
+        document.getElementById('enemy-hand').innerText = '❓';
+        document.getElementById('result-msg').innerText = '';
+
+        // 1秒〜5秒のランダムな待ち時間（1000ms〜5000ms）
+        const randomDelay = Math.floor(Math.random() * 4000) + 1000;
+
+        setTimeout(() => {
+            currentEnemyHand = hands[Math.floor(Math.random() * hands.length)];
+            currentCondition = conditions[Math.floor(Math.random() * conditions.length)];
+
+            document.getElementById('enemy-hand').innerText = currentEnemyHand;
+            document.getElementById('instruction').innerText = currentCondition;
+            
+            startTime = performance.now();
+            canInput = true;
+            setButtonsEnabled(true);
+        }, randomDelay);
+    }
+
+    function playerSelect(playerHand) {
+        if (!canInput) return;
+        canInput = false; // 連打防止のため即座に受付終了
+
+        const reactionTime = (performance.now() - startTime) / 1000;
+        const correctHand = getCorrectHand(currentEnemyHand, currentCondition);
+
+        if (playerHand === correctHand) {
+            totalTime += reactionTime;
+            document.getElementById('result-msg').innerText = `正解！ (${reactionTime.toFixed(3)}秒)`;
+            document.getElementById('result-msg').style.color = 'green';
+        } else {
+            // ミスは1秒のペナルティ付加
+            totalTime += reactionTime + 1.0;
+            misses++;
+            document.getElementById('result-msg').innerText = `ミス！ (+1秒ペナルティ)`;
+            document.getElementById('result-msg').style.color = 'red';
+        }
+
+        setButtonsEnabled(false);
+        setTimeout(nextRound, 1200);
+    }
+
+    function getCorrectHand(enemy, condition) {
+        if (condition === 'あいこ！') return enemy;
+
+        if (condition === '勝て！') {
+            if (enemy === '✊') return '🖐️';
+            if (enemy === '✌️') return '✊';
+            if (enemy === '🖐️') return '✌️';
+        }
+
+        if (condition === '負けろ！') {
+            if (enemy === '✊') return '✌️';
+            if (enemy === '✌️') return '🖐️';
+            if (enemy === '🖐️') return '✊';
+        }
+    }
+
+    function setButtonsEnabled(enabled) {
+        const buttons = document.querySelectorAll('#controls .btn');
+        buttons.forEach(btn => btn.disabled = !enabled);
+    }
+
+    function endGame() {
+        canInput = false;
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('start-btn').style.display = 'inline-block';
+        document.getElementById('start-btn').innerText = 'もう一度遊ぶ';
+        document.getElementById('enemy-hand').innerText = '🏆';
+
+        const avgTime = (totalTime / maxRounds).toFixed(3);
+        document.getElementById('instruction').innerText = `ゲーム終了！`;
+        document.getElementById('result-msg').style.color = 'black';
+        document.getElementById('result-msg').innerHTML = 
+            `平均反応速度: <b>${avgTime}秒</b><br>ミス回数: ${misses}回`;
+    }
+</script>
+
+</body>
+</html>
