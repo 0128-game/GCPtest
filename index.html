@@ -7,7 +7,305 @@
         body { font-family: sans-serif; text-align: center; padding-top: 20px; background-color: #f0f0f0; }
         #game-box { background: white; max-width: 500px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         #enemy-hand { font-size: 80px; margin: 15px 0; min-height: 100px; }
+        #instruction { font-size: 24px; font-weight: bold; color: #d9534f; min-height: 36px; }<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>瞬発力じゃんけんテスト</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 20px; background-color: #f0f0f0; }
+        #game-box { background: white; max-width: 500px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #enemy-hand { font-size: 80px; margin: 15px 0; min-height: 100px; }
         #instruction { font-size: 24px; font-weight: bold; color: #d9534f; min-height: 36px; }
+        .btn { font-size: 18px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        #start-btn { background-color: #5cb85c; font-size: 24px; margin-top: 10px; }
+        #result-msg { font-weight: bold; margin-top: 15px; min-height: 24px; }
+        
+        /* 目立たない設定エリア */
+        .config-toggle { font-size: 12px; color: #777; cursor: pointer; text-decoration: underline; margin-bottom: 10px; }
+        .key-config { display: none; background: #fafafa; padding: 10px; border-radius: 5px; margin-bottom: 15px; border: 1px dashed #ccc; font-size: 14px; }
+        .key-assign-btn { font-size: 13px; padding: 3px 8px; margin-left: 5px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .key-assign-btn.waiting { background: #dc3545; }
+
+        .rank-info { font-size: 13px; color: #555; text-align: left; margin-top: 20px; background: #fafafa; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        .rank-title { font-weight: bold; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="game-box">
+    <h1>じゃんけん瞬発力テスト</h1>
+
+    <!-- 目立たない設定切替 -->
+    <div class="config-toggle" id="config-toggle" onclick="toggleConfig()">⚙️ 操作キーを変更する</div>
+    <div class="key-config" id="key-config-box">
+        <div><b>【キー設定】</b> ボタンを押した後に割り当てたいキーを押してください</div>
+        <div style="margin-top: 8px;">
+            ✊ グー: <b id="disp-g">G</b> <button class="key-assign-btn" onclick="startKeyBind('g', this)">変更</button> | 
+            ✌️ チョキ: <b id="disp-c">C</b> <button class="key-assign-btn" onclick="startKeyBind('c', this)">変更</button> | 
+            🖐️ パー: <b id="disp-p">P</b> <button class="key-assign-btn" onclick="startKeyBind('p', this)">変更</button>
+        </div>
+    </div>
+
+    <div id="instruction">「スタート」を押してね</div>
+    <div id="enemy-hand">✊</div>
+    <div id="result-msg"></div>
+
+    <div id="controls" style="display:none;">
+        <p>指示に合う手を選べ！</p>
+        <button class="btn" id="btn-g" onclick="playerSelect('✊')">✊ グー</button>
+        <button class="btn" id="btn-c" onclick="playerSelect('✌️')">✌️ チョキ</button>
+        <button class="btn" id="btn-p" onclick="playerSelect('🖐️')">🖐️ パー</button>
+    </div>
+
+    <br>
+    <button id="start-btn" class="btn" onclick="startGame()">スタート</button>
+
+    <!-- ランクの基準案内 -->
+    <div class="rank-info">
+        <div class="rank-title">【ランク判定基準（タイム ＆ ミス数）】</div>
+        🏆 <b>Sランク</b> : 平均 0.60秒未満 ＆ <b>ノーミス</b><br>
+        🥇 <b>Aランク</b> : 平均 0.80秒未満 ＆ ミス1回以内<br>
+        🥈 <b>Bランク</b> : 平均 1.00秒未満 ＆ ミス2回以内<br>
+        🥉 <b>Cランク</b> : 平均 1.30秒未満 ＆ ミス3回以内<br>
+        🐢 <b>Dランク</b> : それ以外（1.30秒以上 または ミス4回以上）<br>
+        <small>※待機中に2回フライングするとミスになります</small>
+    </div>
+</div>
+
+<script>
+    const hands = ['✊', '✌️', '🖐️'];
+    const conditions = ['勝て！', '負けろ！', 'あいこ！'];
+    
+    let keyBindings = {
+        g: { code: 'KeyG', display: 'G' },
+        c: { code: 'KeyC', display: 'C' },
+        p: { code: 'KeyP', display: 'P' }
+    };
+
+    let bindingTarget = null; // キー変更待機中のターゲット手 ('g', 'c', 'p')
+    let activeAssignBtn = null;
+
+    let currentEnemyHand = '';
+    let currentCondition = '';
+    let startTime = 0;
+    let round = 0;
+    let totalTime = 0;
+    let misses = 0;
+    const maxRounds = 5;
+    
+    let isWaitingForHand = false;
+    let canInput = false;
+    let earlyPressCount = 0;
+    let timerId = null;
+
+    function toggleConfig() {
+        const box = document.getElementById('key-config-box');
+        box.style.display = box.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // キー割り当て入力の待ち状態にする
+    function startKeyBind(hand, btn) {
+        if (bindingTarget) return; // 既に変更待機中なら無視
+        bindingTarget = hand;
+        activeAssignBtn = btn;
+        btn.innerText = 'キーを押して';
+        btn.classList.add('waiting');
+    }
+
+    // 表示用の文字列を生成（矢印キーなどの対応）
+    function formatKeyDisplay(code, key) {
+        if (code === 'ArrowLeft') return '←';
+        if (code === 'ArrowUp') return '↑';
+        if (code === 'ArrowRight') return '→';
+        if (code === 'ArrowDown') return '↓';
+        if (code === 'Space') return 'Space';
+        return key.length === 1 ? key.toUpperCase() : key;
+    }
+
+    // ボタンの表記を更新
+    function updateKeyGuide() {
+        document.getElementById('btn-g').innerText = `✊ グー (${keyBindings.g.display})`;
+        document.getElementById('btn-c').innerText = `✌️ チョキ (${keyBindings.c.display})`;
+        document.getElementById('btn-p').innerText = `🖐️ パー (${keyBindings.p.display})`;
+        
+        document.getElementById('disp-g').innerText = keyBindings.g.display;
+        document.getElementById('disp-c').innerText = keyBindings.c.display;
+        document.getElementById('disp-p').innerText = keyBindings.p.display;
+    }
+
+    updateKeyGuide();
+
+    // 全般のキーボード処理
+    window.addEventListener('keydown', (event) => {
+        // キー設定待ちの処理
+        if (bindingTarget) {
+            event.preventDefault();
+            const displayStr = formatKeyDisplay(event.code, event.key);
+            keyBindings[bindingTarget] = { code: event.code, display: displayStr };
+            
+            activeAssignBtn.innerText = '変更';
+            activeAssignBtn.classList.remove('waiting');
+            bindingTarget = null;
+            activeAssignBtn = null;
+            
+            updateKeyGuide();
+            return;
+        }
+
+        // ゲームプレイ中の処理
+        let selectedHand = '';
+        if (event.code === keyBindings.g.code) selectedHand = '✊';
+        if (event.code === keyBindings.c.code) selectedHand = '✌️';
+        if (event.code === keyBindings.p.code) selectedHand = '🖐️';
+
+        if (selectedHand) {
+            handleInput(selectedHand);
+        }
+    });
+
+    function playerSelect(playerHand) {
+        handleInput(playerHand);
+    }
+
+    function handleInput(playerHand) {
+        // フライング処理
+        if (isWaitingForHand) {
+            earlyPressCount++;
+            
+            if (earlyPressCount === 1) {
+                document.getElementById('result-msg').innerText = `フライング注意！（あと1回でミス）`;
+                document.getElementById('result-msg').style.color = 'orange';
+            } else if (earlyPressCount >= 2) {
+                clearTimeout(timerId);
+                isWaitingForHand = false;
+                misses++;
+                
+                document.getElementById('result-msg').innerText = `2回フライングでミス！`;
+                document.getElementById('result-msg').style.color = 'red';
+                setTimeout(nextRound, 1200);
+            }
+            return;
+        }
+
+        if (!canInput) return;
+        canInput = false;
+
+        const reactionTime = (performance.now() - startTime) / 1000;
+        const correctHand = getCorrectHand(currentEnemyHand, currentCondition);
+
+        totalTime += reactionTime;
+
+        if (playerHand === correctHand) {
+            document.getElementById('result-msg').innerText = `正解！ (${reactionTime.toFixed(3)}秒)`;
+            document.getElementById('result-msg').style.color = 'green';
+        } else {
+            misses++;
+            document.getElementById('result-msg').innerText = `ミス！ (${reactionTime.toFixed(3)}秒)`;
+            document.getElementById('result-msg').style.color = 'red';
+        }
+
+        setTimeout(nextRound, 1200);
+    }
+
+    function startGame() {
+        round = 0;
+        totalTime = 0;
+        misses = 0;
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('config-toggle').style.display = 'none';
+        document.getElementById('key-config-box').style.display = 'none';
+        document.getElementById('controls').style.display = 'block';
+        nextRound();
+    }
+
+    function nextRound() {
+        if (round >= maxRounds) {
+            endGame();
+            return;
+        }
+        
+        round++;
+        canInput = false;
+        isWaitingForHand = true;
+        earlyPressCount = 0;
+        
+        document.getElementById('instruction').innerText = `第 ${round} 回戦：じゃんけん...`;
+        document.getElementById('enemy-hand').innerText = '❓';
+        document.getElementById('result-msg').innerText = '';
+
+        const randomDelay = Math.floor(Math.random() * 4000) + 1000;
+
+        timerId = setTimeout(() => {
+            isWaitingForHand = false;
+            currentEnemyHand = hands[Math.floor(Math.random() * hands.length)];
+            currentCondition = conditions[Math.floor(Math.random() * conditions.length)];
+
+            document.getElementById('enemy-hand').innerText = currentEnemyHand;
+            document.getElementById('instruction').innerText = currentCondition;
+            
+            startTime = performance.now();
+            canInput = true;
+        }, randomDelay);
+    }
+
+    function getCorrectHand(enemy, condition) {
+        if (condition === 'あいこ！') return enemy;
+
+        if (condition === '勝て！') {
+            if (enemy === '✊') return '🖐️';
+            if (enemy === '✌️') return '✊';
+            if (enemy === '🖐️') return '✌️';
+        }
+
+        if (condition === '負けろ！') {
+            if (enemy === '✊') return '✌️';
+            if (enemy === '✌️') return '🖐️';
+            if (enemy === '🖐️') return '✊';
+        }
+    }
+
+    function endGame() {
+        canInput = false;
+        isWaitingForHand = false;
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('config-toggle').style.display = 'block';
+        document.getElementById('start-btn').style.display = 'inline-block';
+        document.getElementById('start-btn').innerText = 'もう一度遊ぶ';
+
+        const avgTime = parseFloat((totalTime / maxRounds).toFixed(3));
+        
+        let rank = '';
+        let icon = '';
+        
+        if (avgTime < 0.60 && misses === 0) {
+            rank = 'S';
+            icon = '🏆';
+        } else if (avgTime < 0.80 && misses <= 1) {
+            rank = 'A';
+            icon = '🥇';
+        } else if (avgTime < 1.00 && misses <= 2) {
+            rank = 'B';
+            icon = '🥈';
+        } else if (avgTime < 1.30 && misses <= 3) {
+            rank = 'C';
+            icon = '🥉';
+        } else {
+            rank = 'D';
+            icon = '🐢';
+        }
+
+        document.getElementById('enemy-hand').innerText = icon;
+        document.getElementById('instruction').innerText = `ゲーム終了！ [ランク ${rank}]`;
+        document.getElementById('result-msg').style.color = 'black';
+        document.getElementById('result-msg').innerHTML = 
+            `平均反応速度: <b>${avgTime.toFixed(3)}秒</b><br>ミス回数: ${misses}回`;
+    }
+</script>
+
+</body>
+</html>
         .btn { font-size: 18px; padding: 10px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; background-color: #0275d8; color: white; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         #start-btn { background-color: #5cb85c; font-size: 24px; margin-top: 10px; }
